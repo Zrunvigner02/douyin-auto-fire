@@ -12,3 +12,15 @@ config/tasks/
 config.json
 storage-state.json
 storage_state/
+
+# MyAgents/claude local
+.claude/
+cookie.json
+
+# 会话列表导出：含真实好友/群昵称，绝不提交
+chats.json
+chats.md
+chats-before-remark.json
+.config-verify.json
+myagents_files/
+.claude/plans/myagents/

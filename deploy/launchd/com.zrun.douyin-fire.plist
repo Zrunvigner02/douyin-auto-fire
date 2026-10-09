@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.zrun.douyin-fire</string>
+
+    <!-- 直接执行包装脚本；脚本自己会先判断"今天是否已完成"再决定要不要开浏览器 -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/zrun/Desktop/douyin/scripts/daily_run.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/zrun/Desktop/douyin</string>
+
+    <!--
+      四个触发时间点：
+        00:10  首选（Mac 恰好醒着才跑；合盖睡眠时由 launchd 在唤醒后合并补跑）
+        09:30  主力兜底
+        15:00  二次兜底
+        20:00  末班车，距自然日结算还剩 4 小时
+
+      注意：这四个点不是"每天发 4 次"。daily_run.sh 会先检查 artifacts/result.json，
+      今天已全部成功就直接退出，连浏览器都不开。只有真有失败时才会补发。
+    -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict>
+            <key>Hour</key>
+            <integer>0</integer>
+            <key>Minute</key>
+            <integer>10</integer>
+        </dict>
+        <dict>
+            <key>Hour</key>
+            <integer>9</integer>
+            <key>Minute</key>
+            <integer>30</integer>
+        </dict>
+        <dict>
+            <key>Hour</key>
+            <integer>15</integer>
+            <key>Minute</key>
+            <integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key>
+            <integer>20</integer>
+            <key>Minute</key>
+            <integer>0</integer>
+        </dict>
+    </array>
+
+    <!--
+      第五道保险：每次登录/加载本任务时也检查一次今天做完了没。
+      场景：Mac 关机错过了全部四个时间点，开机后这里会补上一次。
+      因为有 daily_run.sh 的完成检查，这次检查绝大多数情况下是零成本的（不开浏览器）。
+
+      注意：launchd 手册明确说明，**关机期间**错过的定时任务不会在开机后自动补跑，
+      只有**睡眠期间**错过的才会。所以这一条是必要的，不是冗余。
+    -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/zrun/Desktop/douyin/artifacts/logs/launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/zrun/Desktop/douyin/artifacts/logs/launchd.err.log</string>
+
+    <!-- 异常退出后最快 60 秒才允许再次拉起，避免失败时反复重启刷爆抖音 -->
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+</dict>
+</plist>
