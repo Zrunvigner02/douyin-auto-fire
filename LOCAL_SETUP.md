@@ -369,17 +369,79 @@ launchctl kickstart -k gui/$(id -u)/com.zrun.douyin-fire
 2. **`降级到位置兜底` 有风险。** 原生表情定位有一个 `fallback_index` 按下标盲点的兜底
    机制；抖音表情面板改版时它可能点错表情。上游目前只提供"比心""开心"两个表情。
 
-## 更新上游代码
+## git remote 约定与同步上游
 
-上游代码未被修改，可以直接拉取更新：
+```
+origin    https://github.com/Zrunvigner02/douyin-auto-fire.git   ← 你的 fork
+upstream  https://github.com/unmev/douyin-auto-fire.git          ← 原仓库
+```
+
+`origin` 指向**你的 fork**（所以 `git push` 推自己），`upstream` 指向原仓库。
+注意 clone 时 `origin` 本来指向的是原仓库，是被改名成 `upstream` 的。
+
+### 拉取上游更新
 
 ```bash
 cd /Users/zrun/douyin-auto-fire
-git stash                # 如有本地改动
-git pull                 # 只涉及 app/ config/ run.py 等上游文件
+git fetch upstream
+git log --oneline HEAD..upstream/main      # 先看有什么新提交
+git merge upstream/main                    # 没冲突就直接合并
+```
+
+**冲突概率很低**：上游改的是 `app/`、`config/`、`run.py`，本机加的都在 `scripts/`、
+`deploy/` 和 `LOCAL_SETUP.md`，两边不重叠。唯一动过的上游文件是 `.gitignore`（加了
+`chats.*` 等忽略项），理论上只在那里可能冲突，手工合并几行即可。
+
+合并后重装依赖（上游可能加了新依赖或改了 Playwright 版本要求）：
+
+```bash
 uv pip install --python .venv/bin/python -r requirements.txt
 .venv/bin/python -m playwright install chromium
 ```
 
-`scripts/` 下新增的脚本不受影响。注意：`.env`、`config.json`、`storage-state.json`
-都在 `.gitignore` 里，`git pull` 不会覆盖它们。
+### 把本机改动推到你的 fork
+
+```bash
+git add -A
+git commit -m "..."
+git push origin main
+```
+
+### 已配置但上游暂时没有新东西
+
+截至 2026-10-10，本地就是上游最新（`af0035f`，上游最后提交于 2026-09-11），
+外加一个本机提交。所以现在 `git fetch upstream` 不会有任何新内容。
+
+## ⚠️ 提交前必须确认的隐私边界
+
+这个仓库是**公开**的（fork 自公开仓库，默认也是公开）。以下文件**永远不要提交**，
+`.gitignore` 已经挡住它们，但换环境或手动 `git add -f` 时要当心：
+
+| 文件 | 内容 | 泄露后果 |
+| --- | --- | --- |
+| `storage-state.json` | 抖音登录凭证 | **等同于账号密码** |
+| `.env` / `config.json` / `.cookie.json` | 凭证路径与全部发送目标 | 暴露你要给谁发消息 |
+| `chats.json` / `chats.md` | **全部会话的真实昵称**（近百个） | 暴露你的社交关系 |
+| `artifacts/` | 发送记录、失败截图、运行日志 | 含真实聊天内容片段 |
+
+**提交前自查**（会扫描所有待提交文件是否含真实昵称或凭证字段）：
+
+```bash
+.venv/bin/python - <<'PY'
+import json, subprocess
+names = [t["name"] for t in json.load(open("config.json", encoding="utf-8"))["targets"]]
+files = [l.strip()[5:-1] for l in subprocess.run(
+    ["git", "add", "-A", "-n"], capture_output=True, text=True).stdout.splitlines()
+    if l.strip().startswith("add '")]
+bad = False
+for f in files:
+    t = open(f, encoding="utf-8", errors="ignore").read()
+    hits = [n for n in names if n in t]
+    if hits:
+        bad = True; print(f"⚠️ {f}: {hits}")
+print("✅ 干净" if not bad else "🚨 有泄露，别提交")
+PY
+```
+
+本文档本身也按此标准**已脱敏**：文中出现的好友/群名全部替换成了 `目标NN` 占位符。
+如果你要往文档里补充新的实操记录，记得同样处理。
