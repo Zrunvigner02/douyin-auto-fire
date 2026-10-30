@@ -52,6 +52,7 @@ bash: /Users/zrun/Desktop/douyin/scripts/daily_run.sh: Operation not permitted
 │   ├── make_config.py             ← 【新增】由 chats.json 生成 config.json
 │   ├── daily_run.sh               ← 【新增】每日包装脚本（跳过/休眠/重试/通知/复检）
 │   ├── verify_sent.py             ← 【新增】接收侧独立复检 + 自动补发
+│   ├── status.sh                  ← 【新增】一条命令看清最近 7 天状态（只读）
 │   ├── install_launchd.sh         ← 【新增】安装定时任务
 │   └── uninstall_launchd.sh       ← 【新增】卸载定时任务
 └── artifacts/                     ← 日志/截图/结果（不进 git）
@@ -172,6 +173,31 @@ launchd 的两条关键行为（来自 `launchd.plist(5)` 手册）：
 
 **未验证**：合盖休眠 → 唤醒后能否合并补跑（`launchd.plist(5)` 手册称会，但本机未实测）。
 即使不成立，最坏结果也只是当天延后到 09:30 执行，不会漏掉一天。
+
+### 2026-10-18 ~ 10-29：连续 10 天全失败（断网）
+
+```
+2026-10-25 00:23:59 [开始]
+2026-10-25 00:24:00 ERROR Page.goto: net::ERR_INTERNET_DISCONNECTED
+```
+
+`10/18–10/22`、`10/25–10/29` 共 10 天，每天 4 个时间点全部失败，每次 1 秒内退出。
+`10/23`、`10/24` 有网，那两天正常跑满。
+
+**教训：通知发了 ≠ 通知被看见。** 日志显示每天 20:00 都触发了带 Basso 响铃的
+"今天可能没续上"通知，`osascript` 零失败，但 10 天的横幅都没被注意到。
+
+因此新增 `scripts/status.sh` —— 主动看一眼比依赖通知可靠：
+
+```bash
+./scripts/status.sh
+```
+
+它会给出最近 7 天每天的成功条数、定时任务状态、凭证文件时间、日志里最高频的
+错误类型。**建议每周跑一次。**
+
+> 这类原因的失败，任何**基于网络**的通知渠道（钉钉/飞书/TG）同样发不出去，
+> 只有本地通知或本地文件有效。
 
 ### 2026-10-08 00:18 那次运行的实际观察
 
@@ -342,6 +368,9 @@ cd /Users/zrun/douyin-auto-fire
 
 # 本次不发 macOS 通知（调试用）
 ./scripts/daily_run.sh --force --no-notify
+
+# 看一眼最近 7 天状态（只读，最常用）
+./scripts/status.sh
 
 # 独立复检今天有没有漏发（不发任何消息）
 .venv/bin/python scripts/verify_sent.py
