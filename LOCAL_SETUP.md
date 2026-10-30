@@ -40,7 +40,7 @@ bash: /Users/zrun/Desktop/douyin/scripts/daily_run.sh: Operation not permitted
 ├── app/ config/ run.py ...        ← 上游原样，未改动
 ├── .venv/                         ← Python 3.12.13（uv 创建）
 ├── .env                           ← 环境变量（凭证路径、HEADLESS 等）
-├── config.json                    ← 任务配置（16 个目标）★ 不进 git
+├── config.json                    ← 任务配置（目标名单，数量会变）★ 不进 git
 ├── storage-state.json             ← 扫码登录凭证 ★ 不进 git，等同于账号密码
 ├── chats.md / chats.json          ← 会话列表导出（含火花天数）
 ├── deploy/launchd/
@@ -92,12 +92,38 @@ Windows 任务计划，**没有 macOS 的 launchd**。
 
 ## 当前任务配置
 
-- **16 个目标**（11 私聊好友 + 5 个群），来自"会话列表中带火花标识"的会话
+- **目标名单**存在 `config.json` 里，数量会变（新增好友、群解散都需要改）
+  - 初版 16 个 = 11 私聊好友 + 5 个群，来自"会话列表中带火花标识"的会话
+  - 2026-10-30 移除了已解散的群 `熬夜会猝444444`，现为 **15 个**
 - **消息**：文字「叮！自动续火花」+ 随机抖音原生表情（比心 / 开心，上游只提供这两个）
-  - 注意：上游 `send_message()` 每次只发一种类型，所以"文字+表情"**是两条消息**，
-    16 个目标共 **32 条**
+  - 注意：上游 `send_message()` 每次只发一种类型，所以"文字+表情"**是两条消息**
+  - 每条目标 2 条，所以账本每天应有 `目标数 × 2` 条（15 个目标 = 30 条）
 - `prevent_duplicates: true` —— 四个补跑点靠它只补发失败的
 - `send_interval_seconds: 3–8` —— 模拟真人的随机节奏
+
+### 增删目标
+
+直接改 `config.json` 的 `targets` 数组（顺手删掉 `_targets_legend` 里对应的条目）。
+改完用仓库自己的解析器校验：
+
+```bash
+.venv/bin/python - <<'PY'
+import sys
+from dataclasses import replace
+from pathlib import Path
+sys.path.insert(0, ".")
+from app.config import load_settings, load_task
+t = load_task(replace(load_settings(), task_config_path=Path("config.json")))
+print(f"目标 {len(t.targets)} 个，账本期望 {sum(len(x.messages) for x in t.targets)} 条")
+PY
+```
+
+**群解散 / 好友注销**的典型表现是 `搜索不到目标好友`（`PageOperationError`，
+错误类型 `permanent`）。这种目标不会被自动移除，会每天报一次失败、拖垮当天的
+退出码，需要手动从 `config.json` 删掉。
+
+删掉目标后，当天账本里已有的、属于它的记录会变成"多余"的——不影响跳过判断
+（那里用的是 `>=`），只是当天条数会大于新的期望值，属正常。
 
 ### 改过备注的目标
 
@@ -220,7 +246,7 @@ idx=8  我  TS=昨天 20:51                            ← 昨天 ✗
 ### 三步闭环
 
 ```
-第一轮  复检 16 个目标  →  列出"今天没发"的
+第一轮  复检全部目标    →  列出"今天没发"的
 第二轮  补发这些目标     →  用与主任务完全相同的 send_message，并写入 history.json
 第三轮  重新复检补发的   →  确认真的发出去了
 ```

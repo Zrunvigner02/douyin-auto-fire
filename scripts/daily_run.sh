@@ -92,6 +92,17 @@ PY
 
 today() { date '+%Y-%m-%d'; }
 
+# 目标数从 config.json 读，避免通知文案里硬编码数字（改名单后会过时）
+target_count() {
+  "$PYTHON" -c "
+import json
+try:
+    print(len(json.load(open('$PROJECT_ROOT/config.json', encoding='utf-8'))['targets']))
+except Exception:
+    print(0)
+" 2>/dev/null
+}
+
 if [ ! -x "$PYTHON" ]; then
   log "[错误] 找不到虚拟环境 Python: $PYTHON"
   notify "续火花：环境异常" "虚拟环境不存在：$PYTHON" "Basso"
@@ -162,9 +173,10 @@ PY
     log "[跳过] 今日任务已全部成功，不启动浏览器。"
     # 今天早些时候失败过、现在已自动恢复 → 补一条通知，免得一直担心
     if [ -f "$STATE" ] && [ "$(cat "$STATE" 2>/dev/null)" = "$(today)" ]; then
-      notify "续火花：已自动恢复" "今天 16 个目标已全部发送成功，无需处理。"
-      rm -f "$STATE"
+      notify "续火花：已自动恢复" "今天 $(target_count) 个目标已全部发送成功，无需处理。"
     fi
+    # 无论是否发过通知都要清理：残留的旧日期会让"已自动恢复"永远不再触发
+    rm -f "$STATE"
     exit 0
   fi
 fi
@@ -231,9 +243,9 @@ case "$STATUS" in
   0)
     log "[完成] 全部成功。"
     if notified_today; then
-      notify "续火花：已自动恢复" "今天 16 个目标已全部发送成功，无需处理。"
-      rm -f "$STATE"
+      notify "续火花：已自动恢复" "今天 $(target_count) 个目标已全部发送成功，无需处理。"
     fi
+    rm -f "$STATE"
 
     # --- 独立复检：回到每个聊天里核对今天到底发没发 -------------------------
     # 主任务报"成功"依据的是发送时的页面状态，那是**发送侧**的自我判断。
@@ -271,7 +283,8 @@ case "$STATUS" in
       log "[失败] 部分目标失败，且今天已无补跑机会。"
       notify "续火花：今天可能没续上" "部分目标发送失败，今天已无自动重试。详见 artifacts/result.json" "Basso"
     fi
-    [ -f "$STATE" ] || today > "$STATE"
+    # 无条件覆盖为今天：只有在同一天内才需要"已自动恢复"的去重语义
+    today > "$STATE"
     ;;
 
   2)
@@ -284,7 +297,8 @@ case "$STATUS" in
       log "[失败] 配置或登录问题，且今天已无补跑机会。需要人工处理。"
       notify "续火花：今天没续上" "登录凭证失效或需要验证，今天已无自动重试。请运行 scripts/login_auto.py 重新扫码。" "Basso"
     fi
-    [ -f "$STATE" ] || today > "$STATE"
+    # 无条件覆盖为今天：只有在同一天内才需要"已自动恢复"的去重语义
+    today > "$STATE"
     ;;
 
   130)
@@ -300,7 +314,8 @@ case "$STATUS" in
       log "[失败] 退出码 $STATUS，且今天已无补跑机会。"
       notify "续火花：今天没续上" "退出码 $STATUS，今天已无自动重试。详见 artifacts/logs/daily-run.log" "Basso"
     fi
-    [ -f "$STATE" ] || today > "$STATE"
+    # 无条件覆盖为今天：只有在同一天内才需要"已自动恢复"的去重语义
+    today > "$STATE"
     ;;
 esac
 
